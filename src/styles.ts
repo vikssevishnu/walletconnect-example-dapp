@@ -13,6 +13,7 @@ export const colors = {
   pink: "255, 51, 102",
   red: "214, 75, 71",
   purple: "110, 107, 233",
+  golden:"183, 163, 105"
 };
 
 export const fonts = {

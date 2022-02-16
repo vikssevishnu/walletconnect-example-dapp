@@ -1,7 +1,9 @@
 import * as React from "react";
+
 import styled from "styled-components";
 import WalletConnect from "@walletconnect/client";
-import QRCodeModal from "@walletconnect/qrcode-modal";
+// import QRCodeModal from "@walletconnect/qrcode-modal";
+import QRCode from "react-qr-code";
 import { convertUtf8ToHex } from "@walletconnect/utils";
 import { IInternalEvent } from "@walletconnect/types";
 import Button from "./components/Button";
@@ -10,8 +12,8 @@ import Wrapper from "./components/Wrapper";
 import Modal from "./components/Modal";
 import Header from "./components/Header";
 import Loader from "./components/Loader";
-import { fonts } from "./styles";
-import { apiGetAccountAssets, apiGetGasPrices, apiGetAccountNonce } from "./helpers/api";
+
+import { apiGetAccountAssets, apiGetGasPrices, apiGetAccountNonce,apiGetUSDValueFromCoinbase, apiGetContractData } from "./helpers/api";
 import {
   sanitizeHex,
   verifySignature,
@@ -20,9 +22,13 @@ import {
 } from "./helpers/utilities";
 import { convertAmountToRawNumber, convertStringToHex } from "./helpers/bignumber";
 import { IAssetData } from "./helpers/types";
-import Banner from "./components/Banner";
+// import Banner from "./components/Banner";
 import AccountAssets from "./components/AccountAssets";
 import { eip712 } from "./helpers/eip712";
+import { fonts } from "./styles";
+
+// import Dropdown from "./components/Dropdown";
+
 
 const SLayout = styled.div`
   position: relative;
@@ -36,23 +42,29 @@ const SContent = styled(Wrapper as any)`
   width: 100%;
   height: 100%;
   padding: 0 16px;
+ 
 `;
 
 const SLanding = styled(Column as any)`
-  height: 600px;
+  height: 100px; 
+  width: 250px;
+ 
 `;
 
 const SButtonContainer = styled(Column as any)`
   width: 250px;
   margin: 50px 0;
+  top: 150px;
+    right: 260px;
 `;
 
 const SConnectButton = styled(Button as any)`
   border-radius: 8px;
-  font-size: ${fonts.size.medium};
+  font-size: ${fonts.size.medium};  
   height: 44px;
   width: 100%;
   margin: 12px 0;
+  color: black;
 `;
 
 const SContainer = styled.div`
@@ -110,22 +122,22 @@ const SValue = styled.div`
   font-family: monospace;
 `;
 
-const STestButtonContainer = styled.div`
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-`;
+// const STestButtonContainer = styled.div`
+//   width: 100%;
+//   display: flex;
+//   justify-content: center;
+//   align-items: center;
+//   flex-wrap: wrap;
+// `;
 
-const STestButton = styled(Button as any)`
-  border-radius: 8px;
-  font-size: ${fonts.size.medium};
-  height: 44px;
-  width: 100%;
-  max-width: 175px;
-  margin: 12px;
-`;
+// const STestButton = styled(Button as any)`
+//   border-radius: 8px;
+//   font-size: ${fonts.size.medium};
+//   height: 44px;
+//   width: 100%;
+//   max-width: 175px;
+//   margin: 12px;
+// `;
 
 interface IAppState {
   connector: WalletConnect | null;
@@ -139,13 +151,16 @@ interface IAppState {
   address: string;
   result: any | null;
   assets: IAssetData[];
+  amountToDowload:string;
+  usdValue:number;
+  creditsDowloaded:boolean;
 }
 
 const INITIAL_STATE: IAppState = {
   connector: null,
   fetching: false,
   connected: false,
-  chainId: 1,
+  chainId: 555,
   showModal: false,
   pendingRequest: false,
   uri: "",
@@ -153,30 +168,65 @@ const INITIAL_STATE: IAppState = {
   address: "",
   result: null,
   assets: [],
+  amountToDowload:'',
+  usdValue:0,
+  creditsDowloaded:false
 };
+
+// const Networks =['ETH Network','SGBlockChain'];
+// const tokens=['ETH','BTC'];
 
 class App extends React.Component<any, any> {
   public state: IAppState = {
     ...INITIAL_STATE,
   };
 
+  public handleChange = (event:React.ChangeEvent<any>)=>{
+    this.setState({amountToDowload: event.target.value});
+  }
+
+  public download = async()=>{
+    console.log("download called");
+    this.testSendTransaction();
+  }
+
   public connect = async () => {
     // bridge url
     const bridge = "https://bridge.walletconnect.org";
 
     // create new connector
-    const connector = new WalletConnect({ bridge, qrcodeModal: QRCodeModal });
-
-    await this.setState({ connector });
-
-    // check if already connected
+    const connector = new WalletConnect({ bridge });
     if (!connector.connected) {
       // create new session
-      await connector.createSession();
+     await connector.createSession().then(() => {
+        const uri = connector.uri;
+        console.log("uri: "+uri);
+      });
     }
+    
+    // // Subscribe to connection events
+    // connector.on("connect", (error, payload) => {
+    //   if (error) {
+    //     throw error;
+    //   }
+    // });
+        
+    await this.setState({ connector });
+
+    if(this.state.connector){
+      await this.setState({ uri: this.state.connector.uri });
+    console.log("stateuri: " + this.state.connector.uri);
+    }
+
+    // check if already connected
+    // if (!connector.connected) {
+    //   // create new session
+    //   await connector.createSession();
+    // }
 
     // subscribe to events
     await this.subscribeToEvents();
+
   };
   public subscribeToEvents = () => {
     const { connector } = this.state;
@@ -271,8 +321,18 @@ class App extends React.Component<any, any> {
     try {
       // get account balances
       const assets = await apiGetAccountAssets(address, chainId);
-
-      await this.setState({ fetching: false, address, assets });
+   
+      const usdValue = await apiGetUSDValueFromCoinbase();
+      let  wethBal :string;
+      wethBal="";
+      assets.filter(x=> {
+        if(x.symbol === "WETH") {
+          wethBal = x.balance!
+        }          
+      });
+      // usdValue = usdValue * (Number(wethBal)/1e18);
+      console.log(wethBal);
+      await this.setState({ fetching: false, address, assets, usdValue });
     } catch (error) {
       console.error(error);
       await this.setState({ fetching: false });
@@ -291,20 +351,26 @@ class App extends React.Component<any, any> {
     // from
     const from = address;
 
-    // to
-    const to = address;
-
+   
     // nonce
     const _nonce = await apiGetAccountNonce(address, chainId);
+     // to
+   
+     const contractAddress = "0x6C80afBA65147C48Ec6Aac62B3e575514C162D00";
+     const to = contractAddress; // await apiGetCasinoWallet();
+     const contractData  = await apiGetContractData(contractAddress,Number(this.state.amountToDowload));
+
+ 
+
     const nonce = sanitizeHex(convertStringToHex(_nonce));
 
     // gasPrice
-    const gasPrices = await apiGetGasPrices();
-    const _gasPrice = gasPrices.slow.price;
-    const gasPrice = sanitizeHex(convertStringToHex(convertAmountToRawNumber(_gasPrice, 9)));
+    // const gasPrices = await apiGetGasPrices();
+    const _gasPrice = 2;
+    const gasPrice = sanitizeHex(convertStringToHex(convertAmountToRawNumber(_gasPrice, 10)));
 
     // gasLimit
-    const _gasLimit = 21000;
+    const _gasLimit = 55560;
     const gasLimit = sanitizeHex(convertStringToHex(_gasLimit));
 
     // value
@@ -312,7 +378,7 @@ class App extends React.Component<any, any> {
     const value = sanitizeHex(convertStringToHex(_value));
 
     // data
-    const data = "0x";
+    const data = contractData;
 
     // test transaction
     const tx = {
@@ -332,6 +398,8 @@ class App extends React.Component<any, any> {
       // toggle pending request indicator
       this.setState({ pendingRequest: true });
 
+      console.log(tx);
+
       // send transaction
       const result = await connector.sendTransaction(tx);
 
@@ -341,13 +409,14 @@ class App extends React.Component<any, any> {
         txHash: result,
         from: address,
         to: address,
-        value: `${_value} ETH`,
+        value: `${this.state.amountToDowload} WETH`,
       };
-
+      await apiGetAccountAssets(address,chainId);
       // display result
       this.setState({
         connector,
         pendingRequest: false,
+        creditsDowloaded:true,
         result: formattedResult || null,
       });
     } catch (error) {
@@ -645,50 +714,112 @@ class App extends React.Component<any, any> {
             address={address}
             chainId={chainId}
             killSession={this.killSession}
-          />
+          />           
+          
+          
           <SContent>
+          
+          <div  style={{
+                  width:'1000px',
+                
+                
+                  display: 'flex',                  
+                }}>
+                   <img 
+                  style={{
+                    width:'1000px',
+                   
+                  }}
+                  src={require('./assets/iViewBanner.png')}
+                />
+                 {/* <div style={{width:'200px',height:'200px'}}>
+                <div style={{
+                  width:'100px',
+                  top:'20px',
+                  position:'absolute',
+                  height:'10px',
+                  }}>
+                <img 
+                  style={{
+                    width:'250px',
+                   
+                  }}
+                  src={require('./assets/winners.png')}
+                />
+                <div style={{
+                  color:'#b7a369',
+                  fontWeight:'bolder',
+                  width:'200px',
+                  paddingTop:'20px',
+                  fontSize:'18px'
+                  }}>
+                    PLEASE INSERT YOUR MEMBER CARD
+                  </div>  
+                </div>
+               
+                </div> */}  
             {!address && !assets.length ? (
               <SLanding center>
-                <h3>
-                  {`Try out WalletConnect`}
-                  <br />
-                  <span>{`v${process.env.REACT_APP_VERSION}`}</span>
-                </h3>
-                <SButtonContainer>
+                {/* <Dropdown values={Networks} />                 */}               
+                <div hidden={this.state.uri === "" ? false : true}><SButtonContainer>
                   <SConnectButton left onClick={this.connect} fetching={fetching}>
                     {"Connect to WalletConnect"}
                   </SConnectButton>
                 </SButtonContainer>
+                </div>
+                <div style={{ 
+                  marginTop: '250px',
+                  marginRight: '400px'}} 
+                  hidden={this.state.uri === "" ? true : false}><QRCode value={this.state.uri} size={96} /></div>
               </SLanding>
             ) : (
-              <SBalances>
-                <Banner />
-                <h3>Actions</h3>
-                <Column center>
-                  <STestButtonContainer>
-                    <STestButton left onClick={this.testSendTransaction}>
-                      {"eth_sendTransaction"}
-                    </STestButton>
-                    <STestButton left onClick={this.testSignTransaction}>
-                      {"eth_signTransaction"}
-                    </STestButton>
-                    <STestButton left onClick={this.testSignTypedData}>
-                      {"eth_signTypedData"}
-                    </STestButton>
-                    <STestButton left onClick={this.testLegacySignMessage}>
-                      {"eth_sign (legacy)"}
-                    </STestButton>
-                    <STestButton left onClick={this.testStandardSignMessage}>
-                      {"eth_sign (standard)"}
-                    </STestButton>
-                    <STestButton left onClick={this.testPersonalSignMessage}>
-                      {"personal_sign"}
-                    </STestButton>
-                  </STestButtonContainer>
-                </Column>
-                <h3>Balances</h3>
+              <SBalances>                           
+             
                 {!fetching ? (
-                  <AccountAssets chainId={chainId} assets={assets} />
+                  !this.state.creditsDowloaded ?(
+                  <div style={{marginTop: '120px',
+                    marginRight: '520px',
+                    fontWeight:'bolder',
+                    width:'275px',
+                    color: '#b7a369'}}>
+                    <AccountAssets chainId={chainId} assets={assets} />
+                    <div style={{
+                      marginTop: '-20px',
+                      marginLeft: '102px',
+                      width: '200px',
+                      fontSize: '12px',
+                      color: 'lightyellow'
+                    }}>{`$${this.state.usdValue} USD/ETH `}</div>
+                     <input style={{
+                       border: 0,
+                       outline: 0,
+                       background: 'transparent',
+                       borderBottom: '2px solid #b7a369',
+                       width: '240px',
+                       color:'#b7a369'
+                     }} type="text" value={this.state.amountToDowload  } placeholder="Enter Amount" onChange={this.handleChange} />
+                     <div style={{
+                       width: '250px',
+                       marginLeft: '10px'
+                     }}>
+                      <SConnectButton left onClick={this.download}>
+                        {"Download Crypto"}
+                      </SConnectButton>
+                    </div>
+                  </div>)
+                  :(
+                    <div style={{
+                      marginTop: '150px',
+                      width: '300px',
+                      marginRight: '500px',
+                      color:'#b7a369',
+                      fontWeight: 'bolder'
+                    }}>
+                      {"Balance: " + this.state.usdValue * Number(this.state.amountToDowload)  * 100 + " Credits"} 
+                    </div>
+                  )
+
+                  
                 ) : (
                   <Column center>
                     <SContainer>
@@ -698,7 +829,9 @@ class App extends React.Component<any, any> {
                 )}
               </SBalances>
             )}
-          </SContent>
+             </div>
+            
+          </SContent>         
         </Column>
         <Modal show={showModal} toggleModal={this.toggleModal}>
           {pendingRequest ? (
@@ -714,6 +847,7 @@ class App extends React.Component<any, any> {
               <SModalTitle>{"Call Request Approved"}</SModalTitle>
               <STable>
                 {Object.keys(result).map(key => (
+                  
                   <SRow key={key}>
                     <SKey>{key}</SKey>
                     <SValue>{result[key].toString()}</SValue>

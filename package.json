@@ -40,8 +40,11 @@
     "qr-image": "^3.2.0",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
+    "react-native-webview": "^11.17.1",
+    "react-qr-code": "^2.0.3",
     "react-scripts-ts": "^4.0.8",
-    "styled-components": "^5.2.0"
+    "styled-components": "^5.2.0",
+    "web3": "^1.7.0"
   },
   "devDependencies": {
     "@types/axios": "^0.14.0",

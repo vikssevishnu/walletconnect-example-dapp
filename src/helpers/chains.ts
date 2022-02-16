@@ -273,4 +273,20 @@ export const SUPPORTED_CHAINS: IChainData[] = [
     chain_id: 10,
     network_id: 10,
   },
+  {
+    name: "sgblockchanin",
+    chain: "ETH",
+    rpc_url: "https://c43b-205-206-114-209.ngrok.io",
+    network: "sgblockchain",
+    native_currency: {
+      name: "SGNativeToken",
+      symbol: "SGT",
+      decimals: "18",
+      contractAddress: "",
+      balance: "",
+    },
+    short_name: "sgb",
+    chain_id: 555,
+    network_id: 555,
+  },
 ];

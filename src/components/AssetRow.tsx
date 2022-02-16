@@ -1,7 +1,7 @@
 import * as React from "react";
 import styled from "styled-components";
 import Icon from "./Icon";
-import ERC20Icon from "./ERC20Icon";
+// import ERC20Icon from "./ERC20Icon";
 import eth from "../assets/eth.svg";
 import xdai from "../assets/xdai.png";
 import { handleSignificantDecimals, convertAmountFromRawNumber } from "../helpers/bignumber";
@@ -40,9 +40,10 @@ const AssetRow = (props: any) => {
         {nativeCurrencyIcon ? (
           <Icon src={nativeCurrencyIcon} />
         ) : (
-          <ERC20Icon contractAddress={asset.contractAddress.toLowerCase()} />
+          // <ERC20Icon contractAddress={asset.contractAddress.toLowerCase()} />
+          ""
         )}
-        <SAssetName>{asset.name}</SAssetName>
+        <SAssetName>{'Hi Player, you\'ve '}</SAssetName>
       </SAssetRowLeft>
       <SAssetRowRight>
         <SAssetBalance>
